@@ -1,8 +1,12 @@
 services:
   hs-shim:
+    # Pull the CI-built image from GHCR: `docker compose pull && up -d`.
+    # `build:` stays as a local-dev fallback: `docker compose up -d --build`
+    # rebuilds from the Dockerfile and tags it as this image name.
+    image: ghcr.io/jonlaliberte/helpscout-webhook-shim:latest
     build: .
-    # Host networking so the shim can reach Hermes on 127.0.0.1:8644 and
-    # cloudflared can reach the shim on 127.0.0.1:9100. Because waitress binds
+    # Host networking so the shim can reach Hermes on 127.0.0.1:8644 and the
+    # HTTPS ingress can reach the shim on 127.0.0.1:9100. Because waitress binds
     # to 127.0.0.1, the port is not exposed on any external interface.
     network_mode: host
     env_file: .env

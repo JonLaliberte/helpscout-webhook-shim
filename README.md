@@ -66,10 +66,15 @@ hermes gateway restart
 ### 3. Bring up the shim + smoke test the local chain
 
 ```bash
-docker compose up -d --build
+docker compose pull        # pulls the CI-built image from GHCR
+docker compose up -d
 docker compose logs -f hs-shim &
 ./smoke-test.sh
 ```
+
+> If the GHCR package is private, run `docker login ghcr.io` (PAT with
+> `read:packages`) before `pull`. To build locally instead of pulling, use
+> `docker compose up -d --build`.
 
 `200` → the full local chain works (shim verified SHA1 → re-signed SHA256 →
 Hermes accepted → agent ran). See `smoke-test.sh` for what `401` / `502` mean.
