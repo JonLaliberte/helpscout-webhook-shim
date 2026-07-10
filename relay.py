@@ -24,6 +24,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 from flask import Flask, request, Response
 
@@ -35,6 +36,16 @@ HERMES_URL = os.environ.get(
 )
 FORWARD_TIMEOUT = float(os.environ.get("FORWARD_TIMEOUT", "15"))
 
+# Off by default. When truthy, every inbound request is dumped in full
+# (timestamp, headers, raw body) to stderr -- captured by `docker compose logs`.
+# Help Scout payloads contain customer PII, so leave this off outside debugging.
+LOG_REQUESTS = os.environ.get("LOG_REQUESTS", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+
 app = Flask(__name__)
 
 
@@ -42,9 +53,26 @@ def _log(msg):
     print(f"[hs-shim] {msg}", file=sys.stderr, flush=True)
 
 
+def _log_request(raw):
+    """Dump the full inbound request when LOG_REQUESTS is set."""
+    if not LOG_REQUESTS:
+        return
+    ts = datetime.now(timezone.utc).isoformat()
+    headers = "".join(f"    {k}: {v}\n" for k, v in request.headers.items())
+    body = raw.decode("utf-8", "replace")
+    _log(
+        "inbound request\n"
+        f"  time: {ts}\n"
+        f"  {request.method} {request.path} from {request.remote_addr}\n"
+        f"  headers:\n{headers}"
+        f"  body: {body}"
+    )
+
+
 @app.post("/hs")
 def relay():
     raw = request.get_data()  # RAW bytes -- verify and re-sign over these exactly.
+    _log_request(raw)  # full dump when LOG_REQUESTS is set; logged before auth so rejects are captured too.
 
     expected = base64.b64encode(
         hmac.new(HS_SECRET, raw, hashlib.sha1).digest()

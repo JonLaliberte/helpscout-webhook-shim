@@ -96,6 +96,20 @@ config and the Help Scout registration.
 
 Then create a real conversation and watch it flow end to end.
 
+## Debugging
+
+Set `LOG_REQUESTS=1` in `.env` and restart to dump every inbound request —
+timestamp, headers, and raw body — to the container log:
+
+```bash
+docker compose logs -f hs-shim
+```
+
+It logs **before** signature verification, so requests the shim *rejects* (bad
+`X-HelpScout-Signature`) are captured too — the one thing Hermes can't see. Pair
+it with Hermes's `{__raw__}` token / `hermes logs gateway -f` to watch the same
+request on both sides of the hop. Logs customer PII; leave it off in normal use.
+
 ## Safety note
 
 The first version is **read-only** (summarize, no writes). Before auto-firing the
