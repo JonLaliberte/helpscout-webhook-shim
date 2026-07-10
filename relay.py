@@ -20,6 +20,7 @@ and pass it straight through.
 import base64
 import hashlib
 import hmac
+import json
 import os
 import sys
 import urllib.error
@@ -83,6 +84,25 @@ def relay():
         return Response("bad HS signature", status=401)
 
     event = request.headers.get("X-HelpScout-Event", "unknown")
+
+    # Hermes hands the agent script only the JSON body over stdin -- our
+    # forwarded headers don't reach it -- so the event type has to travel INSIDE
+    # the body. Inject it as `_hs_event` (underscore prefix avoids collision with
+    # Help Scout's own fields; the script reads this key first).
+    #
+    # ORDER IS LOAD-BEARING: Help Scout signed the ORIGINAL bytes, which we
+    # already verified above. Hermes must verify OUR SHA256 over the MODIFIED
+    # bytes we actually forward -- so we re-sign AFTER injecting, not before.
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict):
+            obj["_hs_event"] = event
+            raw = json.dumps(obj).encode("utf-8")  # modified body: signed AND forwarded
+        else:
+            _log(f"body is JSON but not an object ({type(obj).__name__}); forwarding without _hs_event")
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        _log(f"body is not valid JSON ({e}); forwarding original unmodified")
+
     sig256 = hmac.new(HERMES_SECRET, raw, hashlib.sha256).hexdigest()
     fwd = urllib.request.Request(
         HERMES_URL,
