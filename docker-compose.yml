@@ -1,0 +1,9 @@
+services:
+  hs-shim:
+    build: .
+    # Host networking so the shim can reach Hermes on 127.0.0.1:8644 and
+    # cloudflared can reach the shim on 127.0.0.1:9100. Because waitress binds
+    # to 127.0.0.1, the port is not exposed on any external interface.
+    network_mode: host
+    env_file: .env
+    restart: unless-stopped

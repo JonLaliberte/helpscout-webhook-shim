@@ -1,0 +1,22 @@
+# Snippet to merge into ~/.hermes/config.yaml on the Hermes box.
+#
+# The route inherits Hermes's global WEBHOOK_SECRET (set in ~/.hermes/.env),
+# which must equal WEBHOOK_SECRET in the shim's .env.
+#
+# First version is READ-ONLY: it summarizes the new conversation and delivers
+# the summary to the log. It does NOT draft or write anything on the ticket.
+# Prove the pipe end-to-end first; add drafting once the triage skill exists.
+
+platforms:
+  webhook:
+    enabled: true
+    extra:
+      port: 8644
+      routes:
+        helpscout-tickets:
+          prompt: |
+            A new Help Scout conversation was created (id {id}, subject "{subject}").
+            Using your Help Scout tools, read conversation {id} in full and summarize:
+            who the customer is, what they're asking, and anything relevant from their
+            Magento order history. Do NOT draft or write anything yet -- summary only.
+          deliver: log
