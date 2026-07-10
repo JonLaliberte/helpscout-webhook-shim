@@ -87,8 +87,10 @@ def relay():
 
     # Hermes hands the agent script only the JSON body over stdin -- our
     # forwarded headers don't reach it -- so the event type has to travel INSIDE
-    # the body. Inject it as `_hs_event` (underscore prefix avoids collision with
-    # Help Scout's own fields; the script reads this key first).
+    # the body. Hermes's generic webhook adapter resolves its event type from the
+    # `event_type` field in the payload (its documented field, alongside the
+    # GitHub/GitLab event headers), so we inject it there. We do NOT touch Help
+    # Scout's own top-level `type` field.
     #
     # ORDER IS LOAD-BEARING: Help Scout signed the ORIGINAL bytes, which we
     # already verified above. Hermes must verify OUR SHA256 over the MODIFIED
@@ -96,10 +98,10 @@ def relay():
     try:
         obj = json.loads(raw)
         if isinstance(obj, dict):
-            obj["_hs_event"] = event
+            obj["event_type"] = event
             raw = json.dumps(obj).encode("utf-8")  # modified body: signed AND forwarded
         else:
-            _log(f"body is JSON but not an object ({type(obj).__name__}); forwarding without _hs_event")
+            _log(f"body is JSON but not an object ({type(obj).__name__}); forwarding without event_type")
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         _log(f"body is not valid JSON ({e}); forwarding original unmodified")
 
