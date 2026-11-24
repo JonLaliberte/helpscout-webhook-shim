@@ -1,15 +1,17 @@
 """Help Scout -> Hermes webhook signing shim.
 
 Help Scout signs webhooks with base64(HMAC-SHA1(raw_body)) in the
-X-HelpScout-Signature header. Hermes's generic webhook adapter only speaks
-HMAC-SHA256 (hex) in X-Webhook-Signature. The two never validate against each
-other, so this shim sits in between:
+X-HelpScout-Signature header. Hermes's generic webhook adapter speaks
+HMAC-SHA256 (hex): since v0.23.3 only the timestamped V2 form,
+X-Webhook-Signature-V2 = HMAC-SHA256 of "<X-Webhook-Timestamp>.<body>" (the
+body-only X-Webhook-Signature is refused as replayable). The two never validate
+against each other, so this shim sits in between:
 
     1. Verify Help Scout's SHA1/base64 signature over the RAW request body
        (this is the real authentication -- Help Scout is an unattended machine
        and cannot do interactive auth).
-    2. Re-sign the SAME raw bytes as HMAC-SHA256 (hex) with Hermes's global
-       webhook secret.
+    2. Re-sign the bytes it forwards as HMAC-SHA256 (hex) of
+       "<unix seconds>.<body>" with Hermes's global webhook secret.
     3. Forward the untouched body to Hermes's webhook route.
 
 Signing must happen over the exact bytes received -- never a re-serialized
@@ -23,6 +25,7 @@ import hmac
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -70,6 +73,19 @@ def _log_request(raw):
     )
 
 
+def sign_v2(body, now=None):
+    """(timestamp, signature) for Hermes's generic HMAC V2.
+
+    The timestamp is integer Unix seconds (Hermes rejects one more than 5 minutes
+    off); the signature is hex HMAC-SHA256 of "<timestamp>.<body>". No legacy
+    body-only X-Webhook-Signature is sent: v0.23.3 refuses it, and leaving it out
+    means a captured request cannot be replayed without a fresh timestamp.
+    """
+    timestamp = str(int(time.time() if now is None else now))
+    signed = timestamp.encode() + b"." + body
+    return timestamp, hmac.new(HERMES_SECRET, signed, hashlib.sha256).hexdigest()
+
+
 @app.post("/hs")
 def relay():
     raw = request.get_data()  # RAW bytes -- verify and re-sign over these exactly.
@@ -105,14 +121,15 @@ def relay():
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         _log(f"body is not valid JSON ({e}); forwarding original unmodified")
 
-    sig256 = hmac.new(HERMES_SECRET, raw, hashlib.sha256).hexdigest()
+    timestamp, sig256 = sign_v2(raw)
     fwd = urllib.request.Request(
         HERMES_URL,
         data=raw,
         method="POST",
         headers={
             "Content-Type": "application/json",
-            "X-Webhook-Signature": sig256,
+            "X-Webhook-Timestamp": timestamp,
+            "X-Webhook-Signature-V2": sig256,
             "X-HelpScout-Event": event,
         },
     )

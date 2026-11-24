@@ -9,7 +9,7 @@ The two halves don't line up natively:
 | | Algorithm | Encoding | Header |
 |---|---|---|---|
 | Help Scout signs | HMAC-SHA1 | base64 | `X-HelpScout-Signature` |
-| Hermes verifies (generic) | HMAC-SHA256 | hex | `X-Webhook-Signature` |
+| Hermes verifies (generic V2) | HMAC-SHA256 of `<timestamp>.<body>` | hex | `X-Webhook-Signature-V2` + `X-Webhook-Timestamp` |
 
 Hermes's webhook adapter is SHA256-only (GitHub/GitLab/generic) with no
 SHA1 or custom-header option, so Help Scout **cannot POST to Hermes directly** —
@@ -23,7 +23,9 @@ Help Scout ──HTTPS──▶ HTTPS ingress ──▶ shim :9100 ──▶ Her
 
 It verifies Help Scout's signature over the **raw** body (real authentication —
 Help Scout is unattended and can't do interactive auth), then re-signs the exact
-same bytes as SHA256 and forwards to Hermes.
+bytes it forwards as SHA256 over `<unix seconds>.<body>` (Hermes's timestamped V2
+signature; Hermes v0.23.3 refuses the old body-only `X-Webhook-Signature`, and
+rejects a timestamp more than 5 minutes off) and forwards to Hermes.
 
 ## Files
 
