@@ -19,7 +19,7 @@ import relay  # noqa: E402
 
 
 def hs_sig(body):
-    return base64.b64encode(hmac.new(b"hs-secret", body, hashlib.sha1).digest()).decode()
+    return base64.b64encode(hmac.new(relay.HS_SECRET, body, hashlib.sha1).digest()).decode()
 
 
 class FakeResponse:
@@ -39,7 +39,7 @@ class SignV2(unittest.TestCase):
     def test_signature_is_hmac_of_timestamp_dot_body(self):
         ts, sig = relay.sign_v2(b'{"a":1}', now=1795486545.9)
         self.assertEqual(ts, "1795486545")
-        want = hmac.new(b"hermes-secret", b'1795486545.{"a":1}', hashlib.sha256).hexdigest()
+        want = hmac.new(relay.HERMES_SECRET, b'1795486545.{"a":1}', hashlib.sha256).hexdigest()
         self.assertEqual(sig, want)
 
     def test_timestamp_is_now(self):
@@ -70,7 +70,7 @@ class Relay(unittest.TestCase):
         headers = {k.lower(): v for k, v in req.header_items()}
         self.assertNotIn("x-webhook-signature", headers)
         ts, sig = headers["x-webhook-timestamp"], headers["x-webhook-signature-v2"]
-        want = hmac.new(b"hermes-secret", ts.encode() + b"." + req.data, hashlib.sha256).hexdigest()
+        want = hmac.new(relay.HERMES_SECRET, ts.encode() + b"." + req.data, hashlib.sha256).hexdigest()
         self.assertEqual(sig, want)
         self.assertEqual(json.loads(req.data)["event_type"], "convo.created")
         self.assertEqual(headers["x-helpscout-event"], "convo.created")
